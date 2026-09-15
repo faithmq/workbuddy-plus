@@ -1,12 +1,28 @@
 {
-  "name": "workbuddy-injector",
+  "name": "workbuddy-plus",
   "version": "1.0.0",
-  "description": "WorkBuddy 注入工具前端 —— 检查运行条件并一键启动带注入的 WorkBuddy",
+  "description": "Workbuddy Plus —— 给 WorkBuddy 自动化定时调度增加分钟/秒级颗粒度",
   "main": "main.js",
+  "productName": "Workbuddy Plus",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "build": {
+    "appId": "com.workbuddy.plus",
+    "productName": "Workbuddy Plus",
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.developer-tools"
+    },
+    "dmg": {
+      "title": "Workbuddy Plus ${version}"
+    }
   },
   "devDependencies": {
-    "electron": "^37.0.0"
+    "electron": "^37.0.0",
+    "electron-builder": "^25.0.0"
   }
 }
