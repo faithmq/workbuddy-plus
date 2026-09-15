@@ -49,6 +49,16 @@
       --radius: 8px;
       --radius-lg: 12px;
       --sidebar-w: 236px;
+
+      /* 玻璃材质（Liquid Glass）：半透明 + 模糊/饱和 + 边缘高光模拟折射 */
+      --glass:        color-mix(in oklch, var(--surface) 60%, transparent);
+      --glass-strong: color-mix(in oklch, var(--surface) 76%, transparent);
+      --glass-edge:   color-mix(in oklch, white 55%, transparent);
+      --glass-edge-b: color-mix(in oklch, black 5%, transparent);
+      --glass-shadow: 0 8px 32px color-mix(in oklch, var(--fg) 8%, transparent),
+                      0 1px 2px color-mix(in oklch, var(--fg) 6%, transparent);
+      --glow-1: color-mix(in oklch, var(--accent) 16%, transparent);
+      --glow-2: color-mix(in oklch, var(--ok) 14%, transparent);
     }
 
     :root.dark {
@@ -73,19 +83,36 @@
       --bad:      oklch(64% 0.19 27);
       --bad-soft: color-mix(in oklch, var(--bad) 16%, transparent);
       --bad-text: oklch(70% 0.17 27);
+
+      --glass:        color-mix(in oklch, var(--surface) 52%, transparent);
+      --glass-strong: color-mix(in oklch, var(--surface) 68%, transparent);
+      --glass-edge:   color-mix(in oklch, white 10%, transparent);
+      --glass-edge-b: color-mix(in oklch, black 30%, transparent);
+      --glass-shadow: 0 8px 32px color-mix(in oklch, black 45%, transparent),
+                      0 1px 2px color-mix(in oklch, black 55%, transparent);
+      --glow-1: color-mix(in oklch, var(--accent) 10%, transparent);
+      --glow-2: color-mix(in oklch, var(--ok) 8%, transparent);
     }
 
     *, *::before, *::after { box-sizing: border-box; }
-    html { -webkit-text-size-adjust: 100%; }
+    html { -webkit-text-size-adjust: 100%; background: var(--bg); }
     body {
       margin: 0;
-      background: var(--bg);
       color: var(--fg);
       font-family: var(--font-body);
       font-size: var(--fs-body);
       line-height: 1.55;
       text-rendering: optimizeLegibility;
       -webkit-font-smoothing: antialiased;
+    }
+    /* 玻璃光斑 —— 提供毛玻璃表面背后可折射的色彩（低饱和、克制的光源） */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: -1;
+      background:
+        radial-gradient(1100px 640px at 14% -6%, var(--glow-1), transparent 62%),
+        radial-gradient(900px 560px at 86% 2%, var(--glow-2), transparent 58%),
+        var(--bg);
     }
     img, svg { display: block; max-width: 100%; }
     a { color: inherit; text-decoration: none; }
@@ -105,8 +132,10 @@
       display: flex; flex-direction: column;
       /* 顶部预留 mac 交通灯（红绿灯）空间，避免与品牌区重叠 */
       padding: 52px 14px 18px;
-      background: color-mix(in oklch, var(--surface) 60%, var(--bg));
-      border-right: 1px solid var(--border);
+      background: var(--glass);
+      backdrop-filter: blur(40px) saturate(170%);
+      -webkit-backdrop-filter: blur(40px) saturate(170%);
+      border-right: 1px solid color-mix(in oklch, var(--border) 70%, transparent);
     }
     .side-brand { display: flex; align-items: center; gap: 11px; padding: 4px 8px 18px; }
     .brand-mark {
@@ -143,9 +172,10 @@
       position: sticky; top: 0; z-index: 10;
       display: flex; align-items: center; justify-content: space-between; gap: var(--gap-md);
       padding: 14px 28px;
-      background: color-mix(in oklch, var(--bg) 88%, transparent);
-      backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--border);
+      background: var(--glass);
+      backdrop-filter: blur(30px) saturate(160%);
+      -webkit-backdrop-filter: blur(30px) saturate(160%);
+      border-bottom: 1px solid color-mix(in oklch, var(--border) 70%, transparent);
       -webkit-app-region: drag;
     }
     .appbar button, .appbar .chip { -webkit-app-region: no-drag; }
@@ -155,10 +185,12 @@
     .chip {
       display: inline-flex; align-items: center; gap: 7px;
       padding: 5px 11px;
-      border: 1px solid var(--border);
+      border: 1px solid color-mix(in oklch, var(--border) 70%, transparent);
       border-radius: 999px;
       font-family: var(--font-mono); font-size: 12px; color: var(--muted);
       white-space: nowrap;
+      background: var(--glass-strong);
+      box-shadow: inset 0 1px 0 var(--glass-edge);
     }
 
     .content { padding: 30px 28px 64px; width: 100%; }
@@ -185,10 +217,10 @@
     }
     .btn:active { transform: translateY(1px); }
     .btn svg { width: 15px; height: 15px; }
-    .btn-primary { background: var(--accent-strong); color: var(--surface); border-color: var(--accent-strong); }
-    .btn-primary:hover { background: color-mix(in oklch, var(--accent) 70%, black); border-color: color-mix(in oklch, var(--accent) 70%, black); }
-    .btn-secondary { background: transparent; color: var(--fg); border-color: var(--border); }
-    .btn-secondary:hover { border-color: var(--fg); }
+    .btn-primary { background: var(--accent-strong); color: var(--surface); border-color: var(--accent-strong); box-shadow: inset 0 1px 0 color-mix(in oklch, white 25%, transparent); }
+    .btn-primary:hover { background: color-mix(in oklch, var(--accent) 70%, black); border-color: color-mix(in oklch, var(--accent) 70%, black); box-shadow: inset 0 1px 0 color-mix(in oklch, white 25%, transparent); }
+    .btn-secondary { background: var(--glass-strong); color: var(--fg); border-color: color-mix(in oklch, var(--border) 70%, transparent); box-shadow: inset 0 1px 0 var(--glass-edge); }
+    .btn-secondary:hover { background: var(--glass); border-color: var(--fg); }
     .btn-ghost { background: transparent; color: var(--muted); border-color: transparent; padding-inline: 8px; }
     .btn-ghost:hover { color: var(--fg); background: var(--fg-soft); }
     .btn.is-busy svg { animation: spin 0.8s linear infinite; }
@@ -200,10 +232,13 @@
     }
 
     .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
+      background: var(--glass);
+      backdrop-filter: blur(24px) saturate(150%);
+      -webkit-backdrop-filter: blur(24px) saturate(150%);
+      border: 1px solid color-mix(in oklch, var(--border) 70%, transparent);
       border-radius: var(--radius-lg);
       padding: 22px;
+      box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-edge), inset 0 -1px 0 var(--glass-edge-b);
     }
 
     .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--border); }
@@ -239,8 +274,9 @@
     .metric {
       display: flex; flex-direction: column; gap: 2px;
       padding: 10px 14px;
-      border: 1px solid var(--border); border-radius: var(--radius);
-      background: var(--bg);
+      border: 1px solid color-mix(in oklch, var(--border) 70%, transparent); border-radius: var(--radius);
+      background: var(--glass-strong);
+      box-shadow: inset 0 1px 0 var(--glass-edge);
       min-width: 92px;
     }
     .metric .num { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
@@ -288,7 +324,7 @@
     .about-copy strong { color: var(--fg); font-weight: 600; }
 
     .feature-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--gap-sm); }
-    .feature-cell { border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px; background: var(--surface); }
+    .feature-cell { border: 1px solid color-mix(in oklch, var(--border) 70%, transparent); border-radius: var(--radius-lg); padding: 18px; background: var(--glass-strong); box-shadow: inset 0 1px 0 var(--glass-edge); }
     .feature-cell .mark { font-family: var(--font-mono); font-size: 12px; color: var(--muted); letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
     .feature-cell .mark::before { content: ''; width: 7px; height: 7px; border-radius: 2px; background: var(--muted); }
     .feature-cell h3 { font-size: 14px; font-weight: 600; margin-bottom: 5px; }
@@ -301,7 +337,7 @@
     .step p { font-size: 13px; color: var(--muted); margin-top: 2px; }
 
     .meta-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--gap-sm); }
-    .meta-cell { border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px; background: var(--surface); }
+    .meta-cell { border: 1px solid color-mix(in oklch, var(--border) 70%, transparent); border-radius: var(--radius-lg); padding: 14px 16px; background: var(--glass-strong); box-shadow: inset 0 1px 0 var(--glass-edge); }
     .meta-cell .meta { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 5px; }
     .meta-cell .val { font-size: 14px; font-weight: 500; word-break: break-all; }
 
