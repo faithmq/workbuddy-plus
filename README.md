@@ -17,13 +17,6 @@ WorkBuddy 的自动化定时调度基于 iCal RRULE，但两处硬编码把它�
 
 本仓库通过两层运行时注入，把分钟/秒的**解析、计算、校验、UI** 全部打通。
 
-## 方案总览
-
-| 层 | 注入目标 | 方式 | 效果 |
-|----|----------|------|------|
-| 方案 A | 主进程 daemon `server.js` | `NODE_OPTIONS=--require` hook | 放开 `MINUTELY/SECONDLY` 的解析、计算、校验 |
-| 方向二 | 渲染进程 `automation-X2oiaBDA.js` | `protocol.handle('file')` 拦截 | 间隔配置 UI 增加「时/分/秒」单位下拉 + 摘要正确显示 |
-
 ## 文件结构
 
 ```
@@ -69,29 +62,6 @@ cat /tmp/wb-inject-renderer.log   # 渲染进程：应看到 7 个已注入 + pr
 ```
 
 然后在 WorkBuddy 的「自动化 → 新建任务 → 执行频率 → 间隔」里，即可看到「时/分/秒」单位下拉。
-
-## 技术原理
-
-### 方案 A：注入主进程 daemon
-
-WorkBuddy 的 daemon 子进程（`daemon-app-server-entry.js`）由主进程以 `ELECTRON_RUN_AS_NODE=1` 启动（纯 Node），且主进程会把 `sanitizeNodeOptions(process.env.NODE_OPTIONS)` 传给它——其中 `--require` 不在过滤名单里（只滤 `--openssl-legacy-provider`、`--inspect*`、`--debug`）。
-
-因此设置 `NODE_OPTIONS="--require=automation-seconds-inject.js"`，即可让 daemon 在加载 `server.js` 前执行 hook。hook 拦截 `Module.prototype._compile`，对 `main/server.js` 源码做 5 处字符串替换：
-
-1. `parseRRule` 的 FREQ 白名单加 `SECONDLY/MINUTELY`；
-2. `parseRRule` 返回对象加 `bysecond` 解析；
-3. `computeNextRunAt` 加 `SECONDLY/MINUTELY` 分支；
-4. 插入 `nextMinutely`/`nextSecondly` 计算函数；
-5. `SUPPORTED_FREQUENCIES`（automation_update 工具校验）加 `MINUTELY/SECONDLY`。
-
-### 方向二：注入渲染进程
-
-渲染进程是独立的 Chromium 进程，`NODE_OPTIONS` 进不去，CDP 也拦不住 `app://`（自定义协议）。但主窗口的 chunk 通过 `file://` 加载，主进程的 `protocol.handle('file', ...)` 可以拦截：
-
-- 目标 chunk（`automation-X2oiaBDA.js`）→ 返回字符串替换后的内容（**URL 不变**，相对 import 正常）；
-- 其他 `file://` 请求 → 读取原始内容返回（Electron 的 `fs` 支持 asar）。
-
-对 `automation-X2oiaBDA.js` 做 7 处替换：`toIntervalRrule` 加单位参数、`getScheduleMode`/`getIntervalUnit` 识别分钟秒、`onIntervalChange` 传递单位、间隔面板加「时/分/秒」单位下拉、频率摘要按单位显示。
 
 ## 注意事项
 
