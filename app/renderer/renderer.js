@@ -136,8 +136,10 @@
     try {
       const status = await window.api.checkStatus();
       render(status);
+      return status;
     } catch (e) {
       showToast('检查失败：' + (e && e.message || e));
+      return null;
     }
   }
 
@@ -208,6 +210,11 @@
 
   $('#start-workbuddy').addEventListener('click', startWorkbuddy);
 
-  // 初始加载
-  refresh();
+  // 初始加载：先检查一次；若结果异常（可能是 WorkBuddy 重启中的 transient 误报），延迟自动重试一次确认
+  (async function initialLoad() {
+    const status = await refresh();
+    if (status && status.overall !== 'ok') {
+      setTimeout(() => { refresh(); }, 2000);
+    }
+  })();
 })();
