@@ -1,0 +1,12 @@
+{
+  "name": "workbuddy-injector",
+  "version": "1.0.0",
+  "description": "WorkBuddy 注入工具前端 —— 检查运行条件并一键启动带注入的 WorkBuddy",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^37.0.0"
+  }
+}
