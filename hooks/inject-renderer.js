@@ -53,6 +53,21 @@ function patch(source) {
       'getFrequencySummary按单位显示',
       '\tif (mode === "interval") return t("automation.schedule.intervalSummary", {\n\t\tdays: dayText,\n\t\tcount: String(intervalHours)\n\t});',
       '\tif (mode === "interval") {\n\t\tconst _unit = getIntervalUnit(schedule);\n\t\tconst _unitLabel = _unit === "second" ? "秒" : _unit === "minute" ? "分钟" : "小时";\n\t\treturn `${dayText}，每间隔 ${intervalHours} ${_unitLabel}执行一次`;\n\t}'
+    ],
+    [
+      '运行三角改暂停切换',
+      '/* @__PURE__ */ (0, import_jsx_runtime$1.jsx)(Tooltip, {\n\t\t\t\t\tcontent: t("automation.modal.test"),\n\t\t\t\t\tplacement: "top",\n\t\t\t\t\tchildren: /* @__PURE__ */ (0, import_jsx_runtime$1.jsx)(Button, {\n\t\t\t\t\t\ttype: "button",\n\t\t\t\t\t\tvariant: "ghost",\n\t\t\t\t\t\ticonOnly: true,\n\t\t\t\t\t\tclassName: "atm-row-action-btn atm-row-action-btn--play",\n\t\t\t\t\t\t"aria-label": t("automation.modal.test"),\n\t\t\t\t\t\tonClick: (event) => {\n\t\t\t\t\t\t\tevent.stopPropagation();\n\t\t\t\t\t\t\tonTrigger(item.id).then(() => void 0);\n\t\t\t\t\t\t},\n\t\t\t\t\t\tchildren: /* @__PURE__ */ (0, import_jsx_runtime$1.jsx)(RunPlayIcon, {\n\t\t\t\t\t\t\twidth: 16,\n\t\t\t\t\t\t\theight: 16\n\t\t\t\t\t\t})\n\t\t\t\t\t})\n\t\t\t\t}),',
+      '/* @__PURE__ */ (0, import_jsx_runtime$1.jsx)(Tooltip, {\n\t\t\t\t\tcontent: isActive ? t("automation.modal.pause") : t("automation.modal.resume"),\n\t\t\t\t\tplacement: "top",\n\t\t\t\t\tchildren: /* @__PURE__ */ (0, import_jsx_runtime$1.jsx)(Button, {\n\t\t\t\t\t\ttype: "button",\n\t\t\t\t\t\tvariant: "ghost",\n\t\t\t\t\t\ticonOnly: true,\n\t\t\t\t\t\tclassName: "atm-row-action-btn atm-row-action-btn--play",\n\t\t\t\t\t\t"aria-label": isActive ? t("automation.modal.pause") : t("automation.modal.resume"),\n\t\t\t\t\t\tonClick: (event) => {\n\t\t\t\t\t\t\tevent.stopPropagation();\n\t\t\t\t\t\t\tonToggleStatus(item.id, isActive ? "PAUSED" : "ACTIVE").then(() => void 0);\n\t\t\t\t\t\t},\n\t\t\t\t\t\tchildren: isActive ? /* @__PURE__ */ (0, import_jsx_runtime$1.jsx)(CirclePauseIcon, {}) : /* @__PURE__ */ (0, import_jsx_runtime$1.jsx)(RunPlayIcon, {\n\t\t\t\t\t\t\twidth: 16,\n\t\t\t\t\t\t\theight: 16\n\t\t\t\t\t\t})\n\t\t\t\t\t})\n\t\t\t\t}),'
+    ],
+    [
+      '三点菜单加立即运行选项',
+      'items: [{\n\t\t\t\t\t\t\tkey: "toggle",',
+      'items: [{\n\t\t\t\t\t\t\tkey: "trigger",\n\t\t\t\t\t\t\ticon: /* @__PURE__ */ (0, import_jsx_runtime$1.jsx)(RunPlayIcon, {}),\n\t\t\t\t\t\t\tlabel: t("automation.modal.test")\n\t\t\t\t\t\t}, {\n\t\t\t\t\t\t\tkey: "toggle",'
+    ],
+    [
+      'onSelect加trigger处理',
+      'onSelect: (key) => {\n\t\t\t\t\t\t\tif (key === "toggle") onToggleStatus(item.id, isActive ? "PAUSED" : "ACTIVE").then(() => void 0);\n\t\t\t\t\t\t\telse if (key === "delete") onDelete(item.id).then(() => void 0);\n\t\t\t\t\t\t}',
+      'onSelect: (key) => {\n\t\t\t\t\t\t\tif (key === "trigger") onTrigger(item.id).then(() => void 0);\n\t\t\t\t\t\t\telse if (key === "toggle") onToggleStatus(item.id, isActive ? "PAUSED" : "ACTIVE").then(() => void 0);\n\t\t\t\t\t\t\telse if (key === "delete") onDelete(item.id).then(() => void 0);\n\t\t\t\t\t\t}'
     ]
   ];
 
