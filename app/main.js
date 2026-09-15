@@ -153,7 +153,7 @@ function createWindow() {
     height: 720,
     minWidth: 800,
     minHeight: 560,
-    title: 'WorkBuddy 注入工具',
+    title: 'Workbuddy Plus',
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 16, y: 16 },
     webPreferences: {

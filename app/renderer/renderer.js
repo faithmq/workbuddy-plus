@@ -168,7 +168,7 @@
   function buildReport() {
     if (!lastStatus) return '';
     const lines = [
-      'WorkBuddy 注入工具诊断报告',
+      'Workbuddy Plus 诊断报告',
       '生成时间：' + new Date().toLocaleString('zh-CN'),
       '',
       '[运行条件]',
