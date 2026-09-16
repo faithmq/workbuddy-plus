@@ -44,6 +44,8 @@ cp hooks/*.js hooks/*.sh ~/.workbuddy/hooks/
 ~/.workbuddy/hooks/restart-with-inject.sh
 ```
 
+> 若使用 **Workbuddy Plus** 桌面前端（`app/`），上面第 1 步可以省略：它启动时会自动把内置的注入脚本部署到 `~/.workbuddy/hooks/`，换机器或误删都会自恢复。
+
 ### 手动重启
 
 ```bash

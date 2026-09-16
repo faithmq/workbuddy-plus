@@ -129,6 +129,15 @@
     const scriptDot = $('#script-dot');
     scriptDot.className = 'dot ' + (status.scriptsAvailable === status.scriptsTotal ? 'dot-ok' : status.scriptsAvailable === 0 ? 'dot-bad' : 'dot-warn');
     $('#script-count-text').textContent = status.scriptsAvailable + '/' + status.scriptsTotal + ' 可用';
+
+    // 部署按钮：有缺失时强调「部署脚本」，否则是「重新部署」
+    const deployLabel = $('#deploy-hooks .btn-label');
+    if (deployLabel) {
+      const missing = status.scriptsAvailable < status.scriptsTotal;
+      deployLabel.textContent = missing ? '部署脚本' : '重新部署';
+      $('#deploy-hooks').classList.toggle('btn-primary', missing);
+      $('#deploy-hooks').classList.toggle('btn-secondary', !missing);
+    }
   }
 
   // ── 检查 + 渲染 ────────────────────────────────────────
@@ -207,6 +216,31 @@
       showToast('状态已刷新');
     });
   });
+
+  // ── 部署注入脚本 ───────────────────────────────────────
+  async function deployHooks() {
+    const btn = $('#deploy-hooks');
+    btn.classList.add('is-busy');
+    btn.disabled = true;
+    try {
+      const r = await window.api.deployHooks();
+      if (r && r.ok) {
+        const parts = [];
+        if (r.deployed.length) parts.push('新增 ' + r.deployed.length + ' 个');
+        if (r.updated.length) parts.push('更新 ' + r.updated.length + ' 个');
+        if (r.fixed && r.fixed.length) parts.push('修正权限 ' + r.fixed.length + ' 个');
+        showToast('脚本部署完成：' + (parts.length ? parts.join('，') : '已是最新'));
+      } else {
+        showToast('部署失败：' + ((r && r.errors && r.errors[0]) || (r && r.error) || '未知错误'));
+      }
+    } catch (e) {
+      showToast('部署失败：' + (e && e.message || e));
+    }
+    await refresh();
+    btn.classList.remove('is-busy');
+    btn.disabled = false;
+  }
+  $('#deploy-hooks').addEventListener('click', deployHooks);
 
   $('#start-workbuddy').addEventListener('click', startWorkbuddy);
 

@@ -1,5 +1,7 @@
 node_modules/
 dist/
 out/
+# 构建期由 scripts/sync-hooks.js 从仓库根目录 hooks/ 生成
+app/hooks/
 *.log
 .DS_Store

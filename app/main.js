@@ -14,10 +14,14 @@ const WB_BIN = path.join(WB_PATH, 'Contents', 'MacOS', 'Electron');
 const HOOKS_DIR = path.join(os.homedir(), '.workbuddy', 'hooks');
 
 const HOOK_FILES = [
-  { name: 'automation-seconds-inject.js', purpose: '主进程 daemon 注入' },
-  { name: 'inject-renderer.js', purpose: '渲染进程注入' },
-  { name: 'restart-with-inject.sh', purpose: '一键重启注入脚本' }
+  { name: 'automation-seconds-inject.js', purpose: '主进程 daemon 注入', mode: 0o644 },
+  { name: 'inject-renderer.js', purpose: '渲染进程注入', mode: 0o644 },
+  { name: 'restart-with-inject.sh', purpose: '一键重启注入脚本', mode: 0o755 }
 ];
+
+// 随 app 打包的内置副本（构建期由 scripts/sync-hooks.js 从仓库根目录 hooks/ 同步而来）
+const BUNDLED_HOOKS_DIR = path.join(__dirname, 'hooks');
+const DEPLOY_LOG = '/tmp/wbp-deploy.log';
 
 // 安全地执行 shell 命令，返回 stdout 或 null
 function run(cmd) {
@@ -147,6 +151,81 @@ function startWorkbuddy() {
   return { ok: true, message: '已触发带注入的 WorkBuddy 启动' };
 }
 
+// 把随 app 打包的内置注入脚本部署到 ~/.workbuddy/hooks/
+// mode='auto'：补齐缺失的；已存在但内容与内置不同则更新（旧文件先备份为 .bak）
+// mode='force'：一律重写，供界面「重新部署」按钮使用
+function deployHooks(mode) {
+  const result = {
+    ok: true, mode,
+    deployed: [], updated: [], skipped: [], fixed: [], backedUp: [], errors: []
+  };
+  const log = (m) => {
+    try { fs.appendFileSync(DEPLOY_LOG, '[' + new Date().toISOString() + '] ' + m + '\n'); } catch (_) {}
+  };
+
+  try {
+    fs.mkdirSync(HOOKS_DIR, { recursive: true });
+  } catch (e) {
+    result.ok = false;
+    result.errors.push('无法创建 ' + HOOKS_DIR + '：' + e.message);
+    log('创建目录失败：' + e.message);
+    return result;
+  }
+
+  for (const f of HOOK_FILES) {
+    const src = path.join(BUNDLED_HOOKS_DIR, f.name);
+    const dst = path.join(HOOKS_DIR, f.name);
+
+    let content;
+    try {
+      content = fs.readFileSync(src);
+    } catch (e) {
+      result.errors.push(f.name + '：内置副本读取失败（' + e.message + '）');
+      log(f.name + ' 内置副本读取失败：' + e.message);
+      continue;
+    }
+
+    const exists = fs.existsSync(dst);
+    let identical = false;
+    if (exists) {
+      try { identical = fs.readFileSync(dst).equals(content); } catch (_) { identical = false; }
+    }
+
+    // 内容一致且非强制：只校正权限（asar 不保留可执行位，手抄也可能丢）
+    if (exists && identical && mode !== 'force') {
+      try {
+        if ((fs.statSync(dst).mode & 0o777) !== f.mode) {
+          fs.chmodSync(dst, f.mode);
+          result.fixed.push(f.name);
+          log('修正权限 ' + f.name);
+        }
+      } catch (_) { /* 权限修正失败不阻断 */ }
+      result.skipped.push(f.name);
+      continue;
+    }
+
+    if (exists) {
+      try {
+        fs.copyFileSync(dst, dst + '.bak');
+        result.backedUp.push(f.name + '.bak');
+      } catch (_) { /* 备份失败不阻断部署 */ }
+    }
+
+    try {
+      fs.writeFileSync(dst, content, { mode: f.mode });
+      fs.chmodSync(dst, f.mode);
+      (exists ? result.updated : result.deployed).push(f.name);
+      log((exists ? '更新 ' : '部署 ') + f.name);
+    } catch (e) {
+      result.errors.push(f.name + '：写入失败（' + e.message + '）');
+      log(f.name + ' 写入失败：' + e.message);
+    }
+  }
+
+  result.ok = result.errors.length === 0;
+  return result;
+}
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1040,
@@ -173,10 +252,21 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // 启动即自动部署内置注入脚本：补齐缺失、更新旧版
+  // 这样换机器 / 重装 / 误删 ~/.workbuddy/hooks 后不会再落到「脚本缺失」状态
+  try {
+    const r = deployHooks('auto');
+    console.log('[deploy-hooks] auto:', JSON.stringify(r));
+  } catch (e) {
+    console.error('[deploy-hooks] auto 失败:', e && e.message);
+  }
+
   // IPC：获取检查状态
   ipcMain.handle('check-status', () => collectStatus());
   // IPC：启动 WorkBuddy
   ipcMain.handle('start-workbuddy', () => startWorkbuddy());
+  // IPC：重新部署内置注入脚本（强制覆盖）
+  ipcMain.handle('deploy-hooks', () => deployHooks('force'));
 
   createWindow();
 
