@@ -1,6 +1,6 @@
 {
   "name": "workbuddy-plus",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Workbuddy Plus —— 给 WorkBuddy 自动化定时调度增加分钟/秒级颗粒度",
   "main": "main.js",
   "productName": "Workbuddy Plus",
