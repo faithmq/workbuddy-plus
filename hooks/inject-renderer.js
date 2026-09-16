@@ -23,22 +23,37 @@ const LOG = path.join(os.tmpdir(), 'wb-inject-renderer.log');
 // 已知可用的 chunk 名（优先尝试，命中即用，省去全目录扫描）
 const PREFERRED_CHUNK = 'automation-X2oiaBDA.js';
 
-// 探测 WorkBuddy 的 app.asar 位置（mac 固定路径，Windows 扫描常见安装位置）
+// 探测 WorkBuddy 的 app.asar 位置（mac 固定路径，Windows 优先查运行进程 + 扫描各驱动器）
 function findAsarRoot() {
-  const candidates = [];
   if (process.platform === 'darwin') {
-    candidates.push('/Applications/WorkBuddy.app/Contents/Resources/app.asar');
-  } else if (process.platform === 'win32') {
-    const base = [
-      path.join(process.env.LOCALAPPDATA || '', 'Programs', 'WorkBuddy'),
-      path.join(process.env.LOCALAPPDATA || '', 'Programs', 'workbuddy'),
-      path.join(process.env.PROGRAMFILES || '', 'WorkBuddy')
-    ];
-    for (const b of base) {
-      if (b) candidates.push(path.join(b, 'resources', 'app.asar'));
-    }
+    const p = '/Applications/WorkBuddy.app/Contents/Resources/app.asar';
+    return fs.existsSync(p) ? p : null;
   }
-  for (const p of candidates) {
+  if (process.platform !== 'win32') return null;
+
+  // 1) 查运行中进程的可执行文件路径（最准，能覆盖 E:\WorkBuddy 这类非标准位置）
+  try {
+    const childProcess = require('child_process');
+    const exe = childProcess.execSync(
+      'powershell -NoProfile -Command "(Get-Process WorkBuddy -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Path)"',
+      { encoding: 'utf8', timeout: 8000 }
+    ).trim();
+    if (exe) {
+      const p = path.join(path.dirname(exe), 'resources', 'app.asar');
+      if (fs.existsSync(p)) return p;
+    }
+  } catch (_) { /* 查询失败，走扫描 */ }
+
+  // 2) 扫描常见路径 + 各驱动器根目录下的 WorkBuddy
+  const bases = [
+    path.join(process.env.LOCALAPPDATA || '', 'Programs', 'WorkBuddy'),
+    path.join(process.env.LOCALAPPDATA || '', 'Programs', 'workbuddy'),
+    path.join(process.env.PROGRAMFILES || '', 'WorkBuddy')
+  ];
+  for (const d of 'CDEFG') bases.push(d + ':\\WorkBuddy');
+  for (const b of bases) {
+    if (!b) continue;
+    const p = path.join(b, 'resources', 'app.asar');
     if (fs.existsSync(p)) return p;
   }
   return null;

@@ -1,24 +1,31 @@
 @echo off
-REM WorkBuddy 自动化「分钟/秒级」注入：退出 → 带 NODE_OPTIONS 重启 → 检查日志
-setlocal enabledelayedexpansion
+REM WorkBuddy Plus: install injection bootstrap -> restart WorkBuddy -> show logs
+REM ASCII only. CRLF required.
+REM Set WBP_NOPAUSE=1 (e.g. from the app UI) to skip the final "press any key".
+setlocal
 
 set "HOOKS_DIR=%USERPROFILE%\.workbuddy\hooks"
-set "HOOK=%HOOKS_DIR%\automation-seconds-inject.js"
-set "RENDERER=%HOOKS_DIR%\inject-renderer.js"
+set "PS1=%HOOKS_DIR%\wbp-inject.ps1"
 set "LOG=%TEMP%\wb-inject-hook.log"
 set "RLOG=%TEMP%\wb-inject-renderer.log"
+set "BLOG=%TEMP%\wb-bootstrap.log"
+set "SLOG=%TEMP%\wb-selftest.log"
 set "RESTART_LOG=%TEMP%\wb-restart.log"
 
-REM ── 开始记录重启日志 ──
-echo [%date% %time%] ==== 重启脚本开始 ==== > "%RESTART_LOG%"
+echo [%date% %time%] ==== restart script start ==== > "%RESTART_LOG%"
 
-REM ── 1. 探测 WorkBuddy 安装路径 ──
-echo [1/5] 探测 WorkBuddy 安装路径...
+REM 1. detect WorkBuddy install path
+echo [1/5] detecting WorkBuddy path...
 set "WB_EXE="
 for %%D in (
   "%LOCALAPPDATA%\Programs\WorkBuddy"
   "%LOCALAPPDATA%\Programs\workbuddy"
   "%PROGRAMFILES%\WorkBuddy"
+  "C:\WorkBuddy"
+  "D:\WorkBuddy"
+  "E:\WorkBuddy"
+  "F:\WorkBuddy"
+  "G:\WorkBuddy"
 ) do (
   if not defined WB_EXE (
     for %%E in (WorkBuddy.exe Electron.exe workbuddy.exe) do (
@@ -26,65 +33,72 @@ for %%D in (
     )
   )
 )
-
 if not defined WB_EXE (
-  echo [错误] 未找到 WorkBuddy 可执行文件 >> "%RESTART_LOG%"
-  echo [错误] 未找到 WorkBuddy 可执行文件
+  echo [ERROR] WorkBuddy.exe not found >> "%RESTART_LOG%"
+  echo [ERROR] WorkBuddy.exe not found
   type "%RESTART_LOG%"
-  pause
+  if not defined WBP_NOPAUSE pause
   exit /b 1
 )
-echo [OK] WorkBuddy 可执行文件：%WB_EXE% >> "%RESTART_LOG%"
+echo [OK] WorkBuddy exe: %WB_EXE% >> "%RESTART_LOG%"
 
-REM ── 2. 检查注入脚本是否就绪 ──
-echo [2/5] 检查注入脚本...
-if not exist "%HOOK%" (
-  echo [错误] 主进程注入脚本缺失：%HOOK% >> "%RESTART_LOG%"
-  echo [错误] 主进程注入脚本缺失
-  type "%RESTART_LOG%"
-  pause
+REM 2. check injection sources
+echo [2/5] checking injection sources...
+if not exist "%PS1%" (
+  echo [ERROR] missing %PS1%
+  if not defined WBP_NOPAUSE pause
   exit /b 1
 )
-if not exist "%RENDERER%" (
-  echo [错误] 渲染进程注入脚本缺失：%RENDERER% >> "%RESTART_LOG%"
-  echo [错误] 渲染进程注入脚本缺失
-  type "%RESTART_LOG%"
-  pause
+if not exist "%HOOKS_DIR%\automation-seconds-inject.js" (
+  echo [ERROR] missing automation-seconds-inject.js
+  if not defined WBP_NOPAUSE pause
   exit /b 1
 )
-echo [OK] 注入脚本就绪：%HOOK% / %RENDERER% >> "%RESTART_LOG%"
+if not exist "%HOOKS_DIR%\inject-renderer.js" (
+  echo [ERROR] missing inject-renderer.js
+  if not defined WBP_NOPAUSE pause
+  exit /b 1
+)
+if not exist "%HOOKS_DIR%\win-asar-bootstrap.js" (
+  echo [ERROR] missing win-asar-bootstrap.js
+  if not defined WBP_NOPAUSE pause
+  exit /b 1
+)
 
-REM ── 3. 清空旧日志 ──
-echo [3/5] 清空旧日志...
-del "%LOG%" "%RLOG%" 2>nul
+REM 3. install the asar-unpacked bootstrap (idempotent)
+echo [3/5] installing injection bootstrap...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%PS1%" -Action install >> "%RESTART_LOG%" 2>&1
+echo [OK] bootstrap step done >> "%RESTART_LOG%"
 
-REM ── 4. 退出 WorkBuddy ──
-echo [4/5] 退出 WorkBuddy...
+REM 4. clear old logs and stop WorkBuddy
+echo [4/5] stopping WorkBuddy...
+del "%LOG%" "%RLOG%" "%BLOG%" "%SLOG%" 2>nul
 taskkill /IM WorkBuddy.exe /F >> "%RESTART_LOG%" 2>&1
-taskkill /IM Electron.exe /F >> "%RESTART_LOG%" 2>&1
-timeout /t 3 /nobreak >nul
+ping -n 4 127.0.0.1 >nul
 
-REM ── 5. 带 NODE_OPTIONS 唤起 WorkBuddy ──
-echo [5/5] 带 NODE_OPTIONS 启动 WorkBuddy...
-set "NODE_OPTIONS=--require=%HOOK% --require=%RENDERER%"
-echo [INFO] NODE_OPTIONS=%NODE_OPTIONS% >> "%RESTART_LOG%"
+REM 5. relaunch (bootstrap loads on every start, no env var needed)
+echo [5/5] launching WorkBuddy...
 start "" "%WB_EXE%"
-echo [OK] 已启动 WorkBuddy >> "%RESTART_LOG%"
+echo [OK] WorkBuddy launched >> "%RESTART_LOG%"
 
-echo [等待] 等待加载 (10s)...
-timeout /t 10 /nobreak >nul
+echo [wait] waiting 20s...
+ping -n 21 127.0.0.1 >nul
 
 echo.
-echo ===== 重启日志（%RESTART_LOG%）=====
+echo ===== restart log =====
 type "%RESTART_LOG%"
 
 echo.
-echo ===== 主进程(daemon)注入日志 =====
-if exist "%LOG%" (type "%LOG%") else (echo 未找到 %LOG% —— 主进程注入未生效)
+echo ===== bootstrap log (should list browser + node) =====
+if exist "%BLOG%" (type "%BLOG%") else (echo NOT FOUND %BLOG% - bootstrap did not run)
 
 echo.
-echo ===== renderer 注入日志 =====
-if exist "%RLOG%" (type "%RLOG%") else (echo 未找到 %RLOG% —— 渲染进程注入未生效)
+echo ===== daemon injection log =====
+if exist "%LOG%" (type "%LOG%") else (echo NOT FOUND %LOG% - daemon hook not loaded)
 
 echo.
-pause
+echo ===== renderer injection log =====
+if exist "%RLOG%" (type "%RLOG%") else (echo NOT FOUND %RLOG% - renderer hook not loaded)
+
+echo.
+if not defined WBP_NOPAUSE pause

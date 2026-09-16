@@ -13,22 +13,35 @@ const isWin = process.platform === 'win32';
 
 const HOOKS_DIR = path.join(os.homedir(), '.workbuddy', 'hooks');
 
-// WorkBuddy 安装路径探测（mac 固定 /Applications，Windows 扫描常见安装位置）
+// WorkBuddy 安装路径探测（mac 固定 /Applications；Windows 优先查运行进程 + 扫描各驱动器）
 function findWorkbuddyPath() {
   if (isMac) {
     const p = '/Applications/WorkBuddy.app';
     return fs.existsSync(p) ? p : null;
   }
-  if (isWin) {
-    const candidates = [
-      path.join(process.env.LOCALAPPDATA || '', 'Programs', 'WorkBuddy'),
-      path.join(process.env.LOCALAPPDATA || '', 'Programs', 'workbuddy'),
-      path.join(process.env.PROGRAMFILES || '', 'WorkBuddy')
-    ].filter((p) => p && !p.endsWith(path.sep));
-    for (const p of candidates) {
-      if (fs.existsSync(p)) return p;
+  if (!isWin) return null;
+
+  // 1) 查运行中进程的可执行文件路径（最准，能覆盖 E:\WorkBuddy 这类非标准位置）
+  try {
+    const exe = execSync(
+      'powershell -NoProfile -Command "(Get-Process WorkBuddy -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Path)"',
+      { encoding: 'utf8', timeout: 8000 }
+    ).trim();
+    if (exe) {
+      const dir = path.dirname(exe);
+      if (fs.existsSync(dir)) return dir;
     }
-    return null;
+  } catch (_) { /* 查询失败，走扫描 */ }
+
+  // 2) 扫描常见路径 + 各驱动器根目录下的 WorkBuddy
+  const candidates = [
+    path.join(process.env.LOCALAPPDATA || '', 'Programs', 'WorkBuddy'),
+    path.join(process.env.LOCALAPPDATA || '', 'Programs', 'workbuddy'),
+    path.join(process.env.PROGRAMFILES || '', 'WorkBuddy')
+  ].filter((p) => p && !p.endsWith(path.sep));
+  for (const d of 'CDEFG') candidates.push(d + ':\\WorkBuddy');
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
   }
   return null;
 }
@@ -47,6 +60,8 @@ function findWorkbuddyExe(wbPath) {
 const HOOK_FILES = [
   { name: 'automation-seconds-inject.js', purpose: '主进程 daemon 注入', mode: 0o644 },
   { name: 'inject-renderer.js', purpose: '渲染进程注入', mode: 0o644 },
+  { name: 'win-asar-bootstrap.js', purpose: 'Windows 注入引导片段', mode: 0o644 },
+  { name: 'wbp-inject.ps1', purpose: 'Windows 引导安装/卸载', mode: 0o644 },
   { name: isWin ? 'restart-with-inject.bat' : 'restart-with-inject.sh', purpose: '一键重启注入脚本', mode: isWin ? 0o644 : 0o755 }
 ];
 
@@ -192,7 +207,8 @@ function startWorkbuddy() {
   if (!fs.existsSync(script)) {
     return { ok: false, error: '重启脚本不存在：' + script };
   }
-  const cmd = isWin ? `"${script}"` : `bash "${script}"`;
+  // 非交互调用：让脚本跳过结尾的 pause（否则被 exec 拉起时会一直挂到超时）
+  const cmd = isWin ? `set WBP_NOPAUSE=1&& "${script}"` : `bash "${script}"`;
   // 异步执行（脚本内包含退出 + 等待 + 重启，耗时约 20s，不能阻塞主进程）
   exec(cmd, { timeout: 30000 }, (err, stdout, stderr) => {
     if (err) {

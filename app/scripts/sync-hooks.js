@@ -10,6 +10,8 @@ const DST = path.resolve(__dirname, '..', 'hooks');
 const FILES = [
   'automation-seconds-inject.js',
   'inject-renderer.js',
+  'win-asar-bootstrap.js',
+  'wbp-inject.ps1',
   'restart-with-inject.sh',
   'restart-with-inject.bat'
 ];
