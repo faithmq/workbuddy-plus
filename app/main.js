@@ -8,20 +8,51 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-const WB_PATH = '/Applications/WorkBuddy.app';
-const WB_PLIST = path.join(WB_PATH, 'Contents', 'Info.plist');
-const WB_BIN = path.join(WB_PATH, 'Contents', 'MacOS', 'Electron');
+const isMac = process.platform === 'darwin';
+const isWin = process.platform === 'win32';
+
 const HOOKS_DIR = path.join(os.homedir(), '.workbuddy', 'hooks');
+
+// WorkBuddy 安装路径探测（mac 固定 /Applications，Windows 扫描常见安装位置）
+function findWorkbuddyPath() {
+  if (isMac) {
+    const p = '/Applications/WorkBuddy.app';
+    return fs.existsSync(p) ? p : null;
+  }
+  if (isWin) {
+    const candidates = [
+      path.join(process.env.LOCALAPPDATA || '', 'Programs', 'WorkBuddy'),
+      path.join(process.env.LOCALAPPDATA || '', 'Programs', 'workbuddy'),
+      path.join(process.env.PROGRAMFILES || '', 'WorkBuddy')
+    ].filter((p) => p && !p.endsWith(path.sep));
+    for (const p of candidates) {
+      if (fs.existsSync(p)) return p;
+    }
+    return null;
+  }
+  return null;
+}
+
+// 找 WorkBuddy 可执行文件
+function findWorkbuddyExe(wbPath) {
+  if (!wbPath) return null;
+  if (isMac) return path.join(wbPath, 'Contents', 'MacOS', 'Electron');
+  for (const name of ['WorkBuddy.exe', 'Electron.exe', 'workbuddy.exe']) {
+    const p = path.join(wbPath, name);
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
 
 const HOOK_FILES = [
   { name: 'automation-seconds-inject.js', purpose: '主进程 daemon 注入', mode: 0o644 },
   { name: 'inject-renderer.js', purpose: '渲染进程注入', mode: 0o644 },
-  { name: 'restart-with-inject.sh', purpose: '一键重启注入脚本', mode: 0o755 }
+  { name: isWin ? 'restart-with-inject.bat' : 'restart-with-inject.sh', purpose: '一键重启注入脚本', mode: isWin ? 0o644 : 0o755 }
 ];
 
 // 随 app 打包的内置副本（构建期由 scripts/sync-hooks.js 从仓库根目录 hooks/ 同步而来）
 const BUNDLED_HOOKS_DIR = path.join(__dirname, 'hooks');
-const DEPLOY_LOG = '/tmp/wbp-deploy.log';
+const DEPLOY_LOG = isWin ? path.join(os.tmpdir(), 'wbp-deploy.log') : '/tmp/wbp-deploy.log';
 
 // 安全地执行 shell 命令，返回 stdout 或 null
 function run(cmd) {
@@ -32,22 +63,37 @@ function run(cmd) {
   }
 }
 
-// 检查 WorkBuddy 版本（读 Info.plist 的 CFBundleShortVersionString）
-function checkVersion() {
-  const v = run(`plutil -extract CFBundleShortVersionString raw "${WB_PLIST}"`);
-  return v || null;
+// 检查 WorkBuddy 版本（mac 读 Info.plist，Windows 读 exe 版本信息）
+function checkVersion(wbPath) {
+  if (!wbPath) return null;
+  if (isMac) {
+    const plist = path.join(wbPath, 'Contents', 'Info.plist');
+    return run(`plutil -extract CFBundleShortVersionString raw "${plist}"`);
+  }
+  if (isWin) {
+    const exe = findWorkbuddyExe(wbPath);
+    if (!exe) return null;
+    return run(`powershell -NoProfile -Command "(Get-Item '${exe}').VersionInfo.ProductVersion"`);
+  }
+  return null;
 }
 
 // 检查 WorkBuddy 是否在运行
 function checkRunning() {
-  const out = run('pgrep -f "WorkBuddy.app/Contents/MacOS"');
-  return !!out;
+  if (isMac) {
+    return !!run('pgrep -f "WorkBuddy.app/Contents/MacOS"');
+  }
+  if (isWin) {
+    return !!run('tasklist /FI "IMAGENAME eq WorkBuddy.exe" /NH');
+  }
+  return false;
 }
 
 // 收集全部状态
 function collectStatus() {
-  const version = checkVersion();
-  const exists = fs.existsSync(WB_PATH);
+  const wbPath = findWorkbuddyPath();
+  const exists = !!wbPath;
+  const version = checkVersion(wbPath);
   const running = checkRunning();
 
   const hooks = HOOK_FILES.map((f) => {
@@ -84,9 +130,9 @@ function collectStatus() {
     {
       id: 'wb-path',
       label: 'WorkBuddy 路径',
-      value: exists ? WB_PATH : '未找到',
+      value: exists ? wbPath : '未找到',
       valueType: 'text',
-      note: exists ? '应用存在' : '未在 /Applications 找到 WorkBuddy',
+      note: exists ? '应用存在' : (isMac ? '未在 /Applications 找到 WorkBuddy' : '未在常见安装位置找到 WorkBuddy'),
       status: exists ? 'ok' : 'bad'
     },
     {
@@ -123,8 +169,9 @@ function collectStatus() {
   return {
     overall,
     version: version || '—',
-    wbPath: WB_PATH,
+    wbPath: wbPath || '—',
     running,
+    platform: isMac ? 'macOS' : isWin ? 'Windows' : process.platform,
     healthItems,
     scripts: hooks,
     checksPassed: healthItems.filter((h) => h.status === 'ok').length + hooksOk,
@@ -134,14 +181,20 @@ function collectStatus() {
   };
 }
 
-// 触发带注入的启动：执行 restart-with-inject.sh
+// 触发带注入的启动：执行 restart-with-inject.sh（mac）或 .bat（Windows）
 function startWorkbuddy() {
-  const script = path.join(HOOKS_DIR, 'restart-with-inject.sh');
+  const wbPath = findWorkbuddyPath();
+  if (!wbPath) {
+    return { ok: false, error: '未找到 WorkBuddy 安装路径' };
+  }
+  const scriptName = isWin ? 'restart-with-inject.bat' : 'restart-with-inject.sh';
+  const script = path.join(HOOKS_DIR, scriptName);
   if (!fs.existsSync(script)) {
     return { ok: false, error: '重启脚本不存在：' + script };
   }
+  const cmd = isWin ? `"${script}"` : `bash "${script}"`;
   // 异步执行（脚本内包含退出 + 等待 + 重启，耗时约 20s，不能阻塞主进程）
-  exec(`bash "${script}"`, { timeout: 30000 }, (err, stdout, stderr) => {
+  exec(cmd, { timeout: 30000 }, (err, stdout, stderr) => {
     if (err) {
       console.error('[start-workbuddy] 失败:', err.message);
     } else {
@@ -233,8 +286,8 @@ function createWindow() {
     minWidth: 800,
     minHeight: 560,
     title: 'Workbuddy Plus',
-    titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 16, y: 16 },
+    // macOS 用 hiddenInset 标题栏；Windows 用默认标题栏
+    ...(isMac ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 16, y: 16 } } : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

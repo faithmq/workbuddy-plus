@@ -10,7 +10,8 @@ const DST = path.resolve(__dirname, '..', 'hooks');
 const FILES = [
   'automation-seconds-inject.js',
   'inject-renderer.js',
-  'restart-with-inject.sh'
+  'restart-with-inject.sh',
+  'restart-with-inject.bat'
 ];
 
 fs.rmSync(DST, { recursive: true, force: true });

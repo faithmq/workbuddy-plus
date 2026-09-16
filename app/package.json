@@ -19,6 +19,17 @@
       "category": "public.app-category.developer-tools",
       "icon": "build/icon.icns"
     },
+    "win": {
+      "target": [
+        "portable",
+        "nsis"
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
     "dmg": {
       "title": "Workbuddy Plus ${version}"
     }
