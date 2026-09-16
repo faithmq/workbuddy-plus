@@ -2,8 +2,10 @@
 # WorkBuddy 自动化「分钟/秒级」注入：退出 → 带 NODE_OPTIONS 重启 → 检查日志
 set -u
 
-HOOK="/Users/Rico/.workbuddy/hooks/automation-seconds-inject.js"
-RENDERER="/Users/Rico/.workbuddy/hooks/inject-renderer.js"
+# 自适应定位：始终使用「本脚本所在目录」的 hook，避免硬编码用户名/安装路径
+HOOKS_DIR="$(cd "$(dirname "$0")" && pwd)"
+HOOK="$HOOKS_DIR/automation-seconds-inject.js"
+RENDERER="$HOOKS_DIR/inject-renderer.js"
 LOG="/tmp/wb-inject-hook.log"
 RLOG="/tmp/wb-inject-renderer.log"
 BIN="/Applications/WorkBuddy.app/Contents/MacOS/Electron"
