@@ -15,9 +15,12 @@
 
 const Module = require('module');
 const fs = require('fs');
+const os = require('os');
+const path = require('path');
 
-const LOG_FILE = '/tmp/wb-inject-hook.log';
-const SELFTEST_FILE = '/tmp/wb-selftest.log';
+// 日志路径跨平台：mac 用 /tmp，Windows 用 %TEMP%
+const LOG_FILE = path.join(os.tmpdir(), 'wb-inject-hook.log');
+const SELFTEST_FILE = path.join(os.tmpdir(), 'wb-selftest.log');
 const ENABLED = true; // 置 false 可临时关闭注入
 
 function log() {
@@ -30,8 +33,8 @@ function log() {
 }
 
 // 自测代码：注入到 server.js 模块作用域内（nextHourly 之后），加载时立即执行。
-// 单行写法，避免转义层级混淆；日志写入 /tmp/wb-selftest.log。
-const SELFTEST_CODE = ';(function(){var _l=function(m){try{require("fs").appendFileSync("/tmp/wb-selftest.log","["+Date.now()+"] "+m+"\\n");}catch(e){}};var _n=Date.now();' +
+// 单行写法，避免转义层级混淆；日志路径用 JSON.stringify 嵌入（跨平台、自动转义）。
+const SELFTEST_CODE = ';(function(){var _l=function(m){try{require("fs").appendFileSync(' + JSON.stringify(SELFTEST_FILE) + ',"["+Date.now()+"] "+m+"\\n");}catch(e){}};var _n=Date.now();' +
   'try{var _r1=parseRRule$1("FREQ=MINUTELY;INTERVAL=5");_l("parseRRule MINUTELY OK: "+JSON.stringify(_r1));}catch(e){_l("parseRRule MINUTELY FAIL: "+(e&&e.message));}' +
   'try{var _r2=parseRRule$1("FREQ=SECONDLY;INTERVAL=30");_l("parseRRule SECONDLY OK: "+JSON.stringify(_r2));}catch(e){_l("parseRRule SECONDLY FAIL: "+(e&&e.message));}' +
   'try{var _n1=computeNextRunAt$1({type:"recurring",rrule:"FREQ=MINUTELY;INTERVAL=5"},_n);_l("computeNextRunAt MINUTELY OK: nextRunAt="+_n1+" delta="+(_n1-_n)+"ms");}catch(e){_l("computeNextRunAt MINUTELY FAIL: "+(e&&e.message));}' +
@@ -98,4 +101,4 @@ Module.prototype._compile = function (content, filename) {
   return originalCompile.call(this, content, filename);
 };
 
-log('[HOOK] 注入 hook 已加载, node=' + process.version + ', argv[1]=' + (process.argv[1] || ''));
+log('[HOOK] 注入 hook 已加载, platform=' + process.platform + ', node=' + process.version + ', argv[1]=' + (process.argv[1] || '') + ', log=' + LOG_FILE);

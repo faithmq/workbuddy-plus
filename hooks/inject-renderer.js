@@ -14,12 +14,35 @@
 'use strict';
 
 const fs = require('fs');
-const LOG = '/tmp/wb-inject-renderer.log';
+const os = require('os');
+const path = require('path');
 
-const ASAR_ROOT = '/Applications/WorkBuddy.app/Contents/Resources/app.asar';
-const ASSETS_DIR = ASAR_ROOT + '/renderer/assets';
+// 日志路径跨平台：mac 用 /tmp，Windows 用 %TEMP%
+const LOG = path.join(os.tmpdir(), 'wb-inject-renderer.log');
+
 // 已知可用的 chunk 名（优先尝试，命中即用，省去全目录扫描）
 const PREFERRED_CHUNK = 'automation-X2oiaBDA.js';
+
+// 探测 WorkBuddy 的 app.asar 位置（mac 固定路径，Windows 扫描常见安装位置）
+function findAsarRoot() {
+  const candidates = [];
+  if (process.platform === 'darwin') {
+    candidates.push('/Applications/WorkBuddy.app/Contents/Resources/app.asar');
+  } else if (process.platform === 'win32') {
+    const base = [
+      path.join(process.env.LOCALAPPDATA || '', 'Programs', 'WorkBuddy'),
+      path.join(process.env.LOCALAPPDATA || '', 'Programs', 'workbuddy'),
+      path.join(process.env.PROGRAMFILES || '', 'WorkBuddy')
+    ];
+    for (const b of base) {
+      if (b) candidates.push(path.join(b, 'resources', 'app.asar'));
+    }
+  }
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
 
 function log(m) {
   try { fs.appendFileSync(LOG, '[' + new Date().toISOString() + '] ' + m + '\n'); } catch (_) {}
@@ -111,13 +134,21 @@ function applyPatches(source, items) {
 
 // 列出候选 chunk：已知名优先，其后是 renderer/assets 下的全部 automation*.js
 function candidateChunks() {
+  const asarRoot = findAsarRoot();
+  if (!asarRoot) {
+    warn('未找到 WorkBuddy 的 app.asar（platform=' + process.platform + '），注入无法进行');
+    return [];
+  }
+  const assetsDir = path.join(asarRoot, 'renderer', 'assets');
+  log('[RENDERER] app.asar 路径：' + asarRoot);
+
   const names = [];
-  if (fs.existsSync(ASSETS_DIR + '/' + PREFERRED_CHUNK)) names.push(PREFERRED_CHUNK);
+  if (fs.existsSync(path.join(assetsDir, PREFERRED_CHUNK))) names.push(PREFERRED_CHUNK);
   let all = [];
   try {
-    all = fs.readdirSync(ASSETS_DIR);
+    all = fs.readdirSync(assetsDir);
   } catch (e) {
-    warn('无法扫描 ' + ASSETS_DIR + '：' + (e && e.message));
+    warn('无法扫描 ' + assetsDir + '：' + (e && e.message));
     return names;
   }
   for (const n of all) {
@@ -128,9 +159,11 @@ function candidateChunks() {
 
 // 自动发现目标 chunk 并打补丁；成功返回 { name, patched }，失败返回 null
 function resolveAndPatch() {
+  const asarRoot = findAsarRoot();
+  const assetsDir = asarRoot ? path.join(asarRoot, 'renderer', 'assets') : '';
   const names = candidateChunks();
   if (names.length === 0) {
-    warn('在 ' + ASSETS_DIR + ' 下未找到任何 automation*.js，注入无法进行（WorkBuddy 结构可能已变）');
+    warn('在 ' + (assetsDir || '(未定位)') + ' 下未找到任何 automation*.js，注入无法进行（WorkBuddy 结构可能已变）');
     return null;
   }
   log('[RENDERER] 候选 chunk：' + names.join(', '));
@@ -139,7 +172,7 @@ function resolveAndPatch() {
   for (const name of names) {
     let src;
     try {
-      src = fs.readFileSync(ASSETS_DIR + '/' + name, 'utf8');
+      src = fs.readFileSync(path.join(assetsDir, name), 'utf8');
     } catch (e) {
       log('[RENDERER] 读取 ' + name + ' 失败：' + (e && e.message));
       continue;
@@ -184,7 +217,12 @@ function contentTypeFor(path) {
 function fileUrlToPath(url) {
   try {
     const u = new URL(url);
-    return decodeURIComponent(u.pathname);
+    let p = decodeURIComponent(u.pathname);
+    // Windows 上 file:///C:/xxx 的 pathname 是 /C:/xxx，去掉开头的 /
+    if (process.platform === 'win32' && /^\/[A-Za-z]:/.test(p)) {
+      p = p.slice(1);
+    }
+    return p;
   } catch (_) {
     return '';
   }
@@ -235,4 +273,4 @@ prepareAndHook();
 setTimeout(prepareAndHook, 3000);
 setTimeout(prepareAndHook, 8000);
 
-log('[RENDERER] 注入 hook 已加载, argv[1]=' + (process.argv[1] || ''));
+log('[RENDERER] 注入 hook 已加载, platform=' + process.platform + ', argv[1]=' + (process.argv[1] || '') + ', log=' + LOG);
